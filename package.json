@@ -1,0 +1,15 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx tsx watch server.ts"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "express": "^5.2.1",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
