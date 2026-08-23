@@ -1,12 +1,73 @@
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, type WASocket } from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
-import qrcode from 'qrcode-terminal'
+import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
 
 const activeSockets = new Map<string, WASocket>()
+const sessionQrCodes = new Map<string, string>()
+const sessionConnectionStates = new Map<string, 'connecting' | 'open' | 'close'>()
+const qrWaiters = new Map<string, Array<(qrcode: string | null) => void>>()
+
+type ConnectToWappOptions = {
+    waitForQr?: boolean
+    qrTimeoutMs?: number
+}
 
 function sessionPath(sessionId: string) {
     return `sessions/${sessionId}`
+}
+
+function resolveQrWaiters(sessionId: string, qrcode: string | null) {
+    const waiters = qrWaiters.get(sessionId)
+    if (!waiters) {
+        return
+    }
+
+    qrWaiters.delete(sessionId)
+    for (const resolve of waiters) {
+        resolve(qrcode)
+    }
+}
+
+function publishQrCode(sessionId: string, qrcode: string) {
+    sessionQrCodes.set(sessionId, qrcode)
+    resolveQrWaiters(sessionId, qrcode)
+}
+
+function waitForQrCode(sessionId: string, timeoutMs = 30000) {
+    const existingQrCode = sessionQrCodes.get(sessionId)
+    if (existingQrCode) {
+        return Promise.resolve(existingQrCode)
+    }
+
+    if (sessionConnectionStates.get(sessionId) === 'open') {
+        return Promise.resolve(null)
+    }
+
+    return new Promise<string | null>((resolve) => {
+        const timeoutRef: { current?: ReturnType<typeof setTimeout> } = {}
+        const resolveOnce = (qrcode: string | null) => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current)
+            }
+            resolve(qrcode)
+        }
+
+        timeoutRef.current = setTimeout(() => {
+            const waiters = qrWaiters.get(sessionId) ?? []
+            const remainingWaiters = waiters.filter((waiter) => waiter !== resolveOnce)
+            if (remainingWaiters.length > 0) {
+                qrWaiters.set(sessionId, remainingWaiters)
+            } else {
+                qrWaiters.delete(sessionId)
+            }
+            resolve(null)
+        }, timeoutMs)
+
+        const waiters = qrWaiters.get(sessionId) ?? []
+        waiters.push(resolveOnce)
+        qrWaiters.set(sessionId, waiters)
+    })
 }
 
 async function createSocket(sessionId: string) {
@@ -18,21 +79,30 @@ async function createSocket(sessionId: string) {
     return { sock, saveCreds }
 }
 
-export async function connectToWapp(sessionId: string) {
+export async function connectToWapp(sessionId: string, options: ConnectToWappOptions = {}) {
     const existingSocket = activeSockets.get(sessionId)
     if (existingSocket) {
-        return existingSocket
+        const qrcode = options.waitForQr
+            ? await waitForQrCode(sessionId, options.qrTimeoutMs)
+            : sessionQrCodes.get(sessionId) ?? null
+
+        return { sock: existingSocket, qrcode }
     }
 
     const { sock, saveCreds } = await createSocket(sessionId)
     activeSockets.set(sessionId, sock)
+    sessionConnectionStates.set(sessionId, 'connecting')
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update
         if (qr) {
-            qrcode.generate(qr, { small: true })
+            terminalQrcode.generate(qr, { small: true })
+            publishQrCode(sessionId, qr)
         }
         if (connection === 'close') {
+            sessionConnectionStates.set(sessionId, 'close')
+            sessionQrCodes.delete(sessionId)
+            resolveQrWaiters(sessionId, null)
             const shouldReconnect =
                 (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
             console.log('connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect)
@@ -43,12 +113,19 @@ export async function connectToWapp(sessionId: string) {
                 connectToWapp(sessionId).catch(console.error)
             }
         } else if (connection === 'open') {
+            sessionConnectionStates.set(sessionId, 'open')
+            sessionQrCodes.delete(sessionId)
+            resolveQrWaiters(sessionId, null)
             console.log('opened connection')
         }
     })
 
     sock.ev.on('creds.update', saveCreds)
-    return sock
+    const qrcode = options.waitForQr
+        ? await waitForQrCode(sessionId, options.qrTimeoutMs)
+        : sessionQrCodes.get(sessionId) ?? null
+
+    return { sock, qrcode }
 }
 
 export async function disconnectFromWapp(sessionId: string) {
@@ -74,7 +151,7 @@ export async function disconnectFromWapp(sessionId: string) {
 
 export async function sendTestMessage(sessionId: string, phone: string, message: string) {
     try {
-        const sock = activeSockets.get(sessionId) ?? await connectToWapp(sessionId)
+        const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
         phone = '55'+phone+'@s.whatsapp.net'
@@ -93,7 +170,7 @@ export async function sendTestMessage(sessionId: string, phone: string, message:
 
 export async function sendImageAlone(sessionId: string, phone: string, media: string) {
     try {
-        const sock = activeSockets.get(sessionId) ?? await connectToWapp(sessionId)
+        const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
         phone = '55'+phone+'@s.whatsapp.net'
@@ -113,7 +190,7 @@ export async function sendImageAlone(sessionId: string, phone: string, media: st
 export async function sendImageMessage(sessionId: string, message:string, phone: string, media: string) {
     try {
         console.log(sessionId, message, phone, media)
-        const sock = activeSockets.get(sessionId) ?? await connectToWapp(sessionId)
+        const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
         phone = '55'+phone+'@s.whatsapp.net'

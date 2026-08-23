@@ -8,11 +8,12 @@ router.get('/qrcode/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params
 
-        await connectToWapp(sessionId)
+        const { qrcode } = await connectToWapp(sessionId, { waitForQr: true })
 
         res.json({
             success: true,
-            sessionId
+            sessionId,
+            qrcode
         })
     } catch (error) {
         console.error(error)
