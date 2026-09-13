@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { connectToWapp, disconnectFromWapp, sendTestMessage, sendImageAlone, sendImageMessage, getStatus } from './wappFunctions.ts';
+import { connectToWapp, disconnectFromWapp, sendMessage, sendImageAlone, sendImageMessage, getStatus } from './wappFunctions.ts';
 import multer from 'multer';
 import QRCode from 'qrcode';
 
@@ -82,21 +82,30 @@ router.post('/sessao-ativa',upload.none(), async (req, res) =>{
 
 router.post('/logout-session',upload.none(), async (req, res) => {
     try {
-        const { sender } = req.params;
+        const { sender } = req.body;
+
+        if (!sender) {
+            return res.status(400).json({
+                status: false,
+                message: 'sender obrigatório'
+            });
+        }
 
         const isDisconnected = await disconnectFromWapp(sender);
         console.log(isDisconnected)
 
         if (!isDisconnected) {
+            console.log('isDisconnected: ',isDisconnected)
             return res.status(500).json({
-                status: true,
-                message: 'encerrado',
+                status: false,
+                message: 'Erro ao encerrar',
                 sender
             });
         }
-
+        console.log('encerrado')
         res.json({
-            success: true,
+            status: true,
+            message: 'encerrado',
             sender
         })
     } catch (error) {
@@ -110,12 +119,11 @@ router.post('/logout-session',upload.none(), async (req, res) => {
     }
 })
 
-router.post('/testMessage/:sessionId', async(req,res) =>{
+router.post('/send-message',upload.none(), async (req, res) => {
     try{
-        const { sessionId } = req.params
-        const {phone, message} = req.body;
+        const {sender, number, message} = req.body;
 
-        let {messageSent, error, success} = await sendTestMessage(sessionId, phone, message)
+        let {messageSent, error, success} = await sendMessage(sender, number, message)
 
         if (!messageSent) {
             console.log(error,error == 1006)
@@ -123,75 +131,78 @@ router.post('/testMessage/:sessionId', async(req,res) =>{
                 console.log('sleeping...')
                 await sleep(2000)
 
-                let {messageSent, error, success} = await sendTestMessage(sessionId, phone, message)
+                let {messageSent, error, success} = await sendMessage(sender, number, message)
                 
                 if (error == 0){
                     res.status(200).json({
-                        error: false,
-                        status: 'success',
-                        sessionId,
+                        status: false,
+                        sender,
                         success
                     })
                 }
             }
             return res.status(500).json({
-                success: false,
+                status: false,
                 message: 'Erro ao enviar mensagem de teste',
-                sessionId,
+                sender,
                 content: message,
                 error
             })
         }
 
         res.status(200).json({
-            success: true,
-            status: 'success',
-            sessionId
+            status: true,
+            sender
         })
     }catch  (err){
         console.log(err)
         res.status(500).json({
-            success: false,
+            status: false,
             message: 'Erro ao enviar mensagem de teste',
             error: err.message
         })
     }
 })
 
-router.post('/sendImageTest/:sessionId', async(req,res) =>{
+router.post('/send-media',upload.none(), async (req, res) => {
     try{
-        const { sessionId } = req.params
-        const {phone, media} = req.body;
-        let {messageSent, error} = await sendImageAlone(sessionId, phone, media)
+        const {sender, number, mimetype, file64} = req.body;
+        let {caption} = req.body;
 
+        var cpt = caption.toLowerCase();
+        if (cpt.indexOf(".jpg")>0 || cpt.indexOf(".png")>0 || cpt.indexOf(".bmp")>0 || cpt.indexOf(".jpeg")>0 || cpt.indexOf(".gif")>0)
+        {
+            caption = "";
+        }
+
+        let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption)
+        console.log(messageSent, error)
         if (!messageSent) {
             if (error == 1006){
                 console.log('Sleeping...')
                 await sleep(2000)
-                let {messageSent, error} = await sendImageAlone(sessionId, phone, media)
+                let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption)
                 if (error == 0){
-                    res.status(200).json({
-                        success: true,
-                        status: 'success',
-                        sessionId
+                    return res.status(200).json({
+                        status: true,
+                        sender
                     })
                 }
                 return res.status(500).json({
-                    success: false,
+                    status: false,
                     message: 'Erro ao enviar mensagem de teste',
-                    sessionId
+                    sender
                 })
             }
         }
-        res.status(200).json({
-            success: true,
-            status: 'success',
-            sessionId
+        return res.status(200).json({
+            status: true,
+            sender
         })
     }catch  (err){
         console.log(err)
-        res.status(500).json({
-            success: false,
+        return res.status(500).json({
+            status: false,
             message: 'Erro ao enviar mensagem de teste',
             error: err instanceof Error ? err.message : String(err)
         })

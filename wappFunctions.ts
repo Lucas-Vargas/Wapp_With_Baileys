@@ -6,8 +6,18 @@ import pino from 'pino'
 
 const activeSockets = new Map<string, WASocket>()
 const sessionQrCodes = new Map<string, string>()
-const sessionConnectionStates = new Map<string, 'connecting' | 'open' | 'close'>()
+type SessionConnectionState =
+    | 'connecting'
+    | 'waiting_qr'
+    | 'connected'
+    | 'disconnecting'
+    | 'disconnected'
+    | 'logged_out'
+    | 'unknown'
+
+const sessionConnectionStates = new Map<string, SessionConnectionState>()
 const qrWaiters = new Map<string, Array<(qrcode: string | null) => void>>()
+const manualDisconnectingSessions = new Set<string>()
 
 type ConnectToWappOptions = {
     waitForQr?: boolean
@@ -144,11 +154,13 @@ export async function connectToWapp(
             const statusCode =
                 (lastDisconnect?.error as Boom)
                     ?.output?.statusCode
+            const isManualDisconnect = manualDisconnectingSessions.has(sessionId)
 
             const shouldReconnect =
+                !isManualDisconnect &&
                 statusCode !== DisconnectReason.loggedOut
 
-            if (statusCode === DisconnectReason.loggedOut) {
+            if (statusCode === DisconnectReason.loggedOut || isManualDisconnect) {
                 sessionConnectionStates.set(
                     sessionId,
                     'logged_out'
@@ -164,15 +176,13 @@ export async function connectToWapp(
             if (activeSockets.get(sessionId) === sock) {
                 activeSockets.delete(sessionId)
             }
+            manualDisconnectingSessions.delete(sessionId)
             if (shouldReconnect) {
                 connectToWapp(sessionId)
                     .catch(console.error)
             }
         }
-        console.log(
-            'Status atual:',
-            sessionConnectionStates.get(sessionId)
-        )
+        console.log('Status atual:', sessionConnectionStates.get(sessionId))
     })
     sock.ev.on('creds.update', saveCreds)
     const qrcode = options.waitForQr
@@ -200,12 +210,20 @@ export async function disconnectFromWapp(sessionId: string) {
     const sock = existingSocket ?? (await createSocket(sessionId)).sock
     let disconnected = false
 
+    manualDisconnectingSessions.add(sessionId)
+    sessionConnectionStates.set(sessionId, 'disconnecting')
+    sessionQrCodes.delete(sessionId)
+    resolveQrWaiters(sessionId, null)
+
     try {
         await sock.waitForSocketOpen()
         await sock.logout('User requested disconnect')
+        console.log('Desconectou')
+        sessionConnectionStates.set(sessionId, 'logged_out')
         disconnected = true
     } catch (err) {
         console.error('Erro ao desconectar:', err)
+        sessionConnectionStates.set(sessionId, 'disconnected')
     } finally {
         if (activeSockets.get(sessionId) === sock) {
             activeSockets.delete(sessionId)
@@ -216,12 +234,12 @@ export async function disconnectFromWapp(sessionId: string) {
     return disconnected
 }
 
-export async function sendTestMessage(sessionId: string, phone: string, message: string) {
+export async function sendMessage(sessionId: string, phone: string, message: string) {
     try {
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
-        phone = '55'+phone+'@s.whatsapp.net'
+        phone = phone+'@s.whatsapp.net'
 
         const content = { text: message }
         const njid = phone
@@ -234,21 +252,25 @@ export async function sendTestMessage(sessionId: string, phone: string, message:
         return {messageSent: false, error: err.message}
     }
 }
-
-export async function sendImageAlone(sessionId: string, phone: string, media: string) {
+                                    //sender,           number,         file64,        mimetype          caption
+export async function sendImageAlone(sessionId: string, phone: string, file64: string, mimetype: string, caption: string) {
     try {
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
-        phone = '55'+phone+'@s.whatsapp.net'
+        const media = Buffer.from(file64, 'base64');
+        phone = phone+'@s.whatsapp.net'
 
         const content = { image: {url: media} }
         const njid = phone
-        await sock.sendMessage(njid, content)
-
+        await sock.sendMessage(njid, {
+                               mimetype,
+                               image: media,
+                               caption
+                               });
         return {messageSent: true, error: 0}
 
-    } catch (err) {
+    } catch (err:any) {
         console.error('Erro ao enviar mensagems de teste:', err,'\n')
         return {messageSent: false, error: err.message}
     }
