@@ -2,6 +2,7 @@ import makeWASocket, { DisconnectReason, useMultiFileAuthState, type WASocket } 
 import { Boom } from '@hapi/boom'
 import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
+import pino from 'pino'
 
 const activeSockets = new Map<string, WASocket>()
 const sessionQrCodes = new Map<string, string>()
@@ -73,59 +74,125 @@ function waitForQrCode(sessionId: string, timeoutMs = 30000) {
 async function createSocket(sessionId: string) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath(sessionId))
     const sock = makeWASocket({
-        auth: state
+        auth: state,
+        logger: pino({ level: 'silent' })
     })
 
     return { sock, saveCreds }
 }
 
-export async function connectToWapp(sessionId: string, options: ConnectToWappOptions = {}) {
+export async function connectToWapp(
+    sessionId: string,
+    options: ConnectToWappOptions = {}
+) {
     const existingSocket = activeSockets.get(sessionId)
+
     if (existingSocket) {
+        const status =
+            sessionConnectionStates.get(sessionId) ?? 'unknown'
+
+        // Se já estiver conectado, não espera QR
+        if (status === 'connected') {
+            return {
+                sock: existingSocket,
+                qrcode: null,
+                status
+            }
+        }
+
         const qrcode = options.waitForQr
             ? await waitForQrCode(sessionId, options.qrTimeoutMs)
             : sessionQrCodes.get(sessionId) ?? null
 
-        return { sock: existingSocket, qrcode }
+        return {
+            sock: existingSocket,
+            qrcode,
+            status: sessionConnectionStates.get(sessionId) ?? 'unknown'
+        }
     }
 
     const { sock, saveCreds } = await createSocket(sessionId)
+
     activeSockets.set(sessionId, sock)
     sessionConnectionStates.set(sessionId, 'connecting')
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update
+        const {
+            connection,
+            lastDisconnect,
+            qr
+        } = update
+        if (connection === 'connecting') {
+            sessionConnectionStates.set(sessionId, 'connecting')
+        }
         if (qr) {
-            terminalQrcode.generate(qr, { small: true })
+            sessionConnectionStates.set(sessionId, 'waiting_qr')
+            //terminalQrcode.generate(qr, {
+            //    small: true
+            //})
             publishQrCode(sessionId, qr)
         }
-        if (connection === 'close') {
-            sessionConnectionStates.set(sessionId, 'close')
+        if (connection === 'open') {
+            sessionConnectionStates.set(sessionId, 'connected')
             sessionQrCodes.delete(sessionId)
             resolveQrWaiters(sessionId, null)
+            console.log(
+                `Sessão ${sessionId}: conectado`
+            )
+        }
+        if (connection === 'close') {
+            const statusCode =
+                (lastDisconnect?.error as Boom)
+                    ?.output?.statusCode
+
             const shouldReconnect =
-                (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-            console.log('connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect)
+                statusCode !== DisconnectReason.loggedOut
+
+            if (statusCode === DisconnectReason.loggedOut) {
+                sessionConnectionStates.set(
+                    sessionId,
+                    'logged_out'
+                )
+            } else {
+                sessionConnectionStates.set(
+                    sessionId,
+                    'disconnected'
+                )
+            }
+            sessionQrCodes.delete(sessionId)
+            resolveQrWaiters(sessionId, null)
             if (activeSockets.get(sessionId) === sock) {
                 activeSockets.delete(sessionId)
             }
             if (shouldReconnect) {
-                connectToWapp(sessionId).catch(console.error)
+                connectToWapp(sessionId)
+                    .catch(console.error)
             }
-        } else if (connection === 'open') {
-            sessionConnectionStates.set(sessionId, 'open')
-            sessionQrCodes.delete(sessionId)
-            resolveQrWaiters(sessionId, null)
-            console.log('opened connection')
         }
+        console.log(
+            'Status atual:',
+            sessionConnectionStates.get(sessionId)
+        )
     })
-
     sock.ev.on('creds.update', saveCreds)
     const qrcode = options.waitForQr
-        ? await waitForQrCode(sessionId, options.qrTimeoutMs)
+        ? await waitForQrCode(
+            sessionId,
+            options.qrTimeoutMs
+        )
         : sessionQrCodes.get(sessionId) ?? null
+    return {
+        sock,
+        qrcode,
+        status:
+            sessionConnectionStates.get(sessionId) ??
+            'unknown'
+    }
+}
 
-    return { sock, qrcode }
+export async function getStatus(sessionId: string) {
+    const status = await sessionConnectionStates.get(sessionId)
+    return status
 }
 
 export async function disconnectFromWapp(sessionId: string) {
@@ -157,14 +224,14 @@ export async function sendTestMessage(sessionId: string, phone: string, message:
         phone = '55'+phone+'@s.whatsapp.net'
 
         const content = { text: message }
-        const njid = '555189621990@s.whatsapp.net'
+        const njid = phone
         let success = await sock.sendMessage(njid, content)
 
         return {messageSent: true, error: 0}
 
     } catch (err) {
         console.error('Erro ao enviar mensagem de teste:', err)
-        return {messageSent: false, error: err}
+        return {messageSent: false, error: err.message}
     }
 }
 
@@ -183,7 +250,7 @@ export async function sendImageAlone(sessionId: string, phone: string, media: st
 
     } catch (err) {
         console.error('Erro ao enviar mensagems de teste:', err,'\n')
-        return {messageSent: false, error: err}
+        return {messageSent: false, error: err.message}
     }
 }
 
@@ -203,6 +270,6 @@ export async function sendImageMessage(sessionId: string, message:string, phone:
         
     } catch (err) {
         console.error('Erro ao enviar mensagems de teste:', err)
-        return {messageSent: false, error: err}
+        return {messageSent: false, error: err.message}
     }
 }

@@ -1,47 +1,103 @@
-import { Router } from 'express'
-import { connectToWapp, disconnectFromWapp, sendTestMessage, sendImageAlone, sendImageMessage } from './wappFunctions.ts'
+import { Router } from 'express';
+import { connectToWapp, disconnectFromWapp, sendTestMessage, sendImageAlone, sendImageMessage, getStatus } from './wappFunctions.ts';
+import multer from 'multer';
+import QRCode from 'qrcode';
 
-const router = Router()
+const upload = multer();
+const router = Router();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-router.get('/qrcode/:sessionId', async (req, res) => {
+router.post('/create-session',upload.none(), async (req, res) => {
+    const sender = req.body.sender;
+    const descricao = req.body.descricao;
+    
+    console.log('entrou no create-session');
+    
+    res.status(200).json({
+            status: true,
+            message: 'criado'});
+});
+
+router.post('/qr-code', upload.none(), async (req, res) => {
     try {
-        const { sessionId } = req.params
+        const { sender } = req.body;
+        console.log(sender);
 
-        const { qrcode } = await connectToWapp(sessionId, { waitForQr: true })
-
-        res.json({
-            success: true,
-            sessionId,
-            qrcode
-        })
+        const { qrcode, status } = await connectToWapp(sender, { waitForQr: true });
+        console.log(status);
+        if (status == 'connected'){
+            res.status(200).json({
+                status: 'true',
+                message: 'sucesso',
+                qrcodigo: qrcode,
+                qrcode: '0',
+                ativo: 'OK'
+            });
+            return;
+        }
+        //console.log(qrcode);
+        //console.log(qrUrl);
+        const qrUrl = await QRCode.toDataURL(qrcode);
+        res.status(200).json({
+            status: 'true',
+            message: 'sucesso', 
+            qrcodigo: qrcode,
+            qrcode: qrUrl,
+            ativo: ''
+        });
     } catch (error) {
-        console.error(error)
+        console.error(error);
 
         res.status(500).json({
             success: false,
             message: 'Erro ao conectar WhatsApp'
-        })
+        });
     }
-})
+});
 
-router.post('/disconnect/:sessionId', async (req, res) => {
+router.post('/sessao-ativa',upload.none(), async (req, res) =>{
+    const { sender } = req.body;
+    const status = await getStatus(sender);
+    console.log(status)
+    if (status == 'connected'){
+        res.status(200).json({
+            status: true,
+            message:"ativado",
+            sender
+        });
+    }else if (status == undefined){
+        res.status(422).json({
+            status: false,
+            message:"inexistente",
+            sender
+        });
+    }else {
+        res.status(500).json({
+            status: false,
+            message:"internal server error",
+            sender
+        });
+    }
+});
+
+router.post('/logout-session',upload.none(), async (req, res) => {
     try {
-        const { sessionId } = req.params;
+        const { sender } = req.params;
 
-        const isDisconnected = await disconnectFromWapp(sessionId)
+        const isDisconnected = await disconnectFromWapp(sender);
+        console.log(isDisconnected)
 
         if (!isDisconnected) {
             return res.status(500).json({
-                success: false,
-                message: 'Erro ao desconectar',
-                sessionId
-            })
+                status: true,
+                message: 'encerrado',
+                sender
+            });
         }
 
         res.json({
             success: true,
-            sessionId
+            sender
         })
     } catch (error) {
         console.error(error)
