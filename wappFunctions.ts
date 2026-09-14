@@ -23,11 +23,9 @@ type ConnectToWappOptions = {
     waitForQr?: boolean
     qrTimeoutMs?: number
 }
-
 function sessionPath(sessionId: string) {
     return `sessions/${sessionId}`
 }
-
 function resolveQrWaiters(sessionId: string, qrcode: string | null) {
     const waiters = qrWaiters.get(sessionId)
     if (!waiters) {
@@ -39,12 +37,10 @@ function resolveQrWaiters(sessionId: string, qrcode: string | null) {
         resolve(qrcode)
     }
 }
-
 function publishQrCode(sessionId: string, qrcode: string) {
     sessionQrCodes.set(sessionId, qrcode)
     resolveQrWaiters(sessionId, qrcode)
 }
-
 function waitForQrCode(sessionId: string, timeoutMs = 30000) {
     const existingQrCode = sessionQrCodes.get(sessionId)
     if (existingQrCode) {
@@ -91,10 +87,7 @@ async function createSocket(sessionId: string) {
     return { sock, saveCreds }
 }
 
-export async function connectToWapp(
-    sessionId: string,
-    options: ConnectToWappOptions = {}
-) {
+export async function connectToWapp(sessionId: string, options: ConnectToWappOptions = {}) {
     const existingSocket = activeSockets.get(sessionId)
 
     if (existingSocket) {

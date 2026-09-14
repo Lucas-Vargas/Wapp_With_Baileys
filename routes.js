@@ -13,7 +13,7 @@ router.post('/create-session',upload.none(), async (req, res) => {
     
     console.log('entrou no create-session');
     
-    res.status(200).json({
+    return res.status(200).json({
             status: true,
             message: 'criado'});
 });
@@ -26,7 +26,7 @@ router.post('/qr-code', upload.none(), async (req, res) => {
         const { qrcode, status } = await connectToWapp(sender, { waitForQr: true });
         console.log(status);
         if (status == 'connected'){
-            res.status(200).json({
+            return res.status(200).json({
                 status: 'true',
                 message: 'sucesso',
                 qrcodigo: qrcode,
@@ -35,10 +35,9 @@ router.post('/qr-code', upload.none(), async (req, res) => {
             });
             return;
         }
-        //console.log(qrcode);
-        //console.log(qrUrl);
+
         const qrUrl = await QRCode.toDataURL(qrcode);
-        res.status(200).json({
+        return res.status(200).json({
             status: 'true',
             message: 'sucesso', 
             qrcodigo: qrcode,
@@ -48,7 +47,7 @@ router.post('/qr-code', upload.none(), async (req, res) => {
     } catch (error) {
         console.error(error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: 'Erro ao conectar WhatsApp'
         });
@@ -60,19 +59,19 @@ router.post('/sessao-ativa',upload.none(), async (req, res) =>{
     const status = await getStatus(sender);
     console.log(status)
     if (status == 'connected'){
-        res.status(200).json({
+        return res.status(200).json({
             status: true,
             message:"ativado",
             sender
         });
     }else if (status == undefined){
-        res.status(422).json({
+        return res.status(422).json({
             status: false,
             message:"inexistente",
             sender
         });
     }else {
-        res.status(500).json({
+        return res.status(500).json({
             status: false,
             message:"internal server error",
             sender
@@ -103,7 +102,7 @@ router.post('/logout-session',upload.none(), async (req, res) => {
             });
         }
         console.log('encerrado')
-        res.json({
+        return res.status(200).json({
             status: true,
             message: 'encerrado',
             sender
@@ -111,7 +110,7 @@ router.post('/logout-session',upload.none(), async (req, res) => {
     } catch (error) {
         console.error(error)
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: 'Erro ao desconectar',
             error: error instanceof Error ? error.message : String(error)
@@ -134,8 +133,8 @@ router.post('/send-message',upload.none(), async (req, res) => {
                 let {messageSent, error, success} = await sendMessage(sender, number, message)
                 
                 if (error == 0){
-                    res.status(200).json({
-                        status: false,
+                    return res.status(200).json({
+                        status: true,
                         sender,
                         success
                     })
@@ -143,22 +142,22 @@ router.post('/send-message',upload.none(), async (req, res) => {
             }
             return res.status(500).json({
                 status: false,
-                message: 'Erro ao enviar mensagem de teste',
+                message: 'Erro ao enviar mensagem',
                 sender,
                 content: message,
                 error
             })
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             status: true,
             sender
         })
     }catch  (err){
         console.log(err)
-        res.status(500).json({
+        return res.status(500).json({
             status: false,
-            message: 'Erro ao enviar mensagem de teste',
+            message: 'Erro ao enviar mensagem',
             error: err.message
         })
     }
@@ -190,7 +189,7 @@ router.post('/send-media',upload.none(), async (req, res) => {
                 }
                 return res.status(500).json({
                     status: false,
-                    message: 'Erro ao enviar mensagem de teste',
+                    message: 'Erro ao enviar mensagem',
                     sender
                 })
             }
@@ -203,11 +202,12 @@ router.post('/send-media',upload.none(), async (req, res) => {
         console.log(err)
         return res.status(500).json({
             status: false,
-            message: 'Erro ao enviar mensagem de teste',
+            message: 'Erro ao enviar mensagem',
             error: err instanceof Error ? err.message : String(err)
         })
     }
 })
+
 router.post('/sendImageMessage/:sessionId', async(req,res) =>{
     try{
         const { sessionId } = req.params
