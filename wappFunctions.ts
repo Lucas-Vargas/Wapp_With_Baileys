@@ -81,7 +81,12 @@ function waitForQrCode(sessionId: string, timeoutMs = 30000) {
 
 async function verificarNumeroExite(number:string, sock:WASocket){
     const numeroExiste = await sock.onWhatsApp(number);
-    return numeroExiste[0]
+    if (numeroExiste.length > 1){
+        return {exists: false}
+    }else{
+        return numeroExiste[0]    
+    }
+    
 }
 
 async function verificarSessoesDesconectadas(sessoes: string[]){
@@ -131,7 +136,6 @@ export async function reconectSessions(){
     
     return {sessoes}
 }
-
 
 async function createSocket(sessionId: string) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath(sessionId))

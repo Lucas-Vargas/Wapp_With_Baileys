@@ -8,8 +8,6 @@ const router = Router();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 reconectSessions();
-//console.log(teste);
-
 
 router.post('/create-session',upload.none(), async (req, res) => {
     const sender = req.body.sender;
@@ -187,24 +185,24 @@ router.post('/send-media',upload.none(), async (req, res) => {
             caption = "";
         }
 
-        let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption)
+        let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption);
         if (!messageSent) {
             if (error == 1006){
-                console.log('Sleeping...')
-                await sleep(2000)
-                let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption)
+                console.log('Sleeping...');
+                await sleep(2000);
+                let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption);
                 if (error == 0){
-                    console.log("Anexo enviado 2!")
+                    console.log("Anexo enviado 2!");
                     return res.status(200).json({
                         status: true,
                         sender
-                    })
+                    });
                 }
                 return res.status(500).json({
                     status: false,
                     message: 'Erro ao enviar mensagem',
                     sender
-                })
+                });
             }
         }
         if (!messageSent){
@@ -226,48 +224,49 @@ router.post('/send-media',upload.none(), async (req, res) => {
             status: false,
             message: 'Erro ao enviar mensagem',
             error: err instanceof Error ? err.message : String(err)
-        })
+        });
     }
-})
+});
 
+//Em desuso
 router.post('/sendImageMessage/:sessionId', async(req,res) =>{
     try{
-        const { sessionId } = req.params
+        const { sessionId } = req.params;
         const {phone, message, media} = req.body;
-        let {messageSent, error} = await sendImageMessage(sessionId, message, phone, media)
+        let {messageSent, error} = await sendImageMessage(sessionId, message, phone, media);
 
         if (!messageSent) {
             if (error == 1006){
-                console.log('Sleeping...')
-                await sleep(2000)
-                let {messageSent, error} = await sendImageMessage(sessionId, message, phone, media)
+                console.log('Sleeping...');
+                await sleep(2000);
+                let {messageSent, error} = await sendImageMessage(sessionId, message, phone, media);
                 if (error == 0){
                     res.status(200).json({
                         success: true,
                         status: 'success',
                         sessionId
-                    })
+                    });
                 }
                 return res.status(500).json({
                     success: false,
                     message: 'Erro ao enviar mensagem de teste',
                     sessionId
-                })
+                });
             }
         }
         res.status(200).json({
             success: true,
             status: 'success',
             sessionId
-        })
+        });
     }catch  (err){
-        console.log(err)
+        console.log(err);
         res.status(500).json({
             success: false,
             message: 'Erro ao enviar mensagem de teste',
             error: err instanceof Error ? err.message : String(err)
-        })
+        });
     }
-})
+});
 
-export default router
+export default router;
