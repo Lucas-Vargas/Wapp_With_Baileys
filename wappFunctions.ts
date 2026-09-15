@@ -4,6 +4,7 @@ import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
 import pino from 'pino'
 import fs from 'fs'
+const sleep = (ms: number): Promise<void> => {return new Promise((resolve) => setTimeout(resolve, ms));};
 
 const activeSockets = new Map<string, WASocket>()
 const sessionQrCodes = new Map<string, string>()
@@ -78,9 +79,27 @@ function waitForQrCode(sessionId: string, timeoutMs = 30000) {
     })
 }
 
+async function verificarNumeroExite(number:string, sock:WASocket){
+    const numeroExiste = await sock.onWhatsApp(number);
+    return numeroExiste[0]
+}
+
+async function verificarSessoesDesconectadas(sessoes: string[]){
+    console.log('Sessões excluidas:')
+    for(let count = 0; count < sessoes.lenght(); count++){
+        let sessaoVerificada = await getStatus(sessoes[count])
+        console.log('estatus exclusao: ',sessaoVerificada)
+        if (sessaoVerificada != 'conected' && sessaoVerificada != undefined){
+            fs.rm(`./sessions/${sessoes[count]}`)
+            console.log(sessoes[count])
+        }
+    }
+    
+}
 export async function reconectSessions(){
     const caminho = './sessions'; 
     let sessoes: string[] = []
+    let sessoes_desconectadas: string[] = []
     const promises: Promise<string | number>[] = []
     
     const itens = await fs.readdir(caminho, { withFileTypes: true }, (err, itens) => {
@@ -102,12 +121,17 @@ export async function reconectSessions(){
         }
       });
     });
-    if (true){
+    /*if (sessoes.lenght > 0){
         console.log('Tentando Reconectar sessões:')
         console.log(sessoes)
-    }
+        await sleep(5000)
+        console.log('entrou no verificarSessoesDesconectadas')
+        await verificarSessoesDesconectadas(sessoes)
+    }*/
+    
     return {sessoes}
 }
+
 
 async function createSocket(sessionId: string) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath(sessionId))
@@ -265,8 +289,15 @@ export async function sendMessage(sessionId: string, phone: string, message: str
     try {
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
+        
+        const numeroExiste = await verificarNumeroExite(phone, sock);
 
-        phone = phone+'@s.whatsapp.net'
+        if (!numeroExiste?.exists){
+            console.log('Numero enviado não existe! ',numeroExiste)
+            return {messageSent: false, error: 'Numero nao existe'}
+        }
+        
+        phone = numeroExiste.jid
 
         const content = { text: message }
         const njid = phone
@@ -285,25 +316,32 @@ export async function sendImageAlone(sessionId: string, phone: string, file64: s
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
-        const media = Buffer.from(file64, 'base64');
-        phone = phone+'@s.whatsapp.net'
+        const numeroExiste = await verificarNumeroExite(phone, sock);
 
+        if (!numeroExiste?.exists){
+            console.log('Numero enviado não existe! ',numeroExiste)
+            return {messageSent: false, error: 'Numero nao existe'}
+        }
+        
+        const media = Buffer.from(file64, 'base64');
+        phone = numeroExiste.jid
+        let njid = phone
         const content = { image: {url: media} }
-        const njid = phone
+        
         if (mimetype == 'application/pdf'){
             await sock.sendMessage(njid, {document: media, caption});
         }else{
             await sock.sendMessage(njid, {image: media, caption});
         }
-        console.log('enviado ao cliente')
         return {messageSent: true, error: 0}
-
+        
     } catch (err:any) {
-        console.error('Erro ao enviar mensagems de teste:', err,'\n')
+        console.error('Erro ao enviar anexo:', err,'\n')
         return {messageSent: false, error: err.message}
     }
 }
 
+//Em desuso
 export async function sendImageMessage(sessionId: string, message:string, phone: string, media: string) {
     try {
         console.log(sessionId, message, phone, media)

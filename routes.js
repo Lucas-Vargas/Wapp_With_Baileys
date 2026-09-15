@@ -8,6 +8,8 @@ const router = Router();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 reconectSessions();
+//console.log(teste);
+
 
 router.post('/create-session',upload.none(), async (req, res) => {
     const sender = req.body.sender;
@@ -59,7 +61,7 @@ router.post('/qr-code', upload.none(), async (req, res) => {
 router.post('/sessao-ativa',upload.none(), async (req, res) =>{
     const { sender } = req.body;
     const status = await getStatus(sender);
-    console.log('Stauts: ',status, 'Sessão: ',sender)
+    console.log('Status: ',status, 'Sessão: ',sender)
     if (status == 'connected'){
         return res.status(200).json({
             status: true,
@@ -136,14 +138,13 @@ router.post('/send-message',upload.none(), async (req, res) => {
         let {messageSent, error, success} = await sendMessage(sender, number, message)
 
         if (!messageSent) {
-            console.log(error,error == 1006)
             if(error == 1006){
-                console.log('sleeping...')
                 await sleep(2000)
 
                 let {messageSent, error, success} = await sendMessage(sender, number, message)
                 
                 if (error == 0){
+                    console.log("Mensagem enviada!")
                     return res.status(200).json({
                         status: true,
                         sender,
@@ -159,7 +160,8 @@ router.post('/send-message',upload.none(), async (req, res) => {
                 error
             })
         }
-
+        
+        console.log("Mensagem enviada!")
         return res.status(200).json({
             status: true,
             sender
@@ -177,7 +179,6 @@ router.post('/send-message',upload.none(), async (req, res) => {
 router.post('/send-media',upload.none(), async (req, res) => {
     try{
         const {sender, number, mimetype, file64} = req.body;
-        console.log(sender, number, mimetype);
         let {caption} = req.body;
 
         var cpt = caption.toLowerCase();
@@ -187,13 +188,13 @@ router.post('/send-media',upload.none(), async (req, res) => {
         }
 
         let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption)
-        console.log(messageSent, error)
         if (!messageSent) {
             if (error == 1006){
                 console.log('Sleeping...')
                 await sleep(2000)
                 let {messageSent, error} = await sendImageAlone(sender, number, file64, mimetype, caption)
                 if (error == 0){
+                    console.log("Anexo enviado 2!")
                     return res.status(200).json({
                         status: true,
                         sender
@@ -206,10 +207,19 @@ router.post('/send-media',upload.none(), async (req, res) => {
                 })
             }
         }
-        return res.status(200).json({
-            status: true,
-            sender
-        })
+        if (!messageSent){
+            return res.status(500).json({
+                status: false,
+                message: 'Erro ao enviar mensagem.',
+                sender
+            });
+        }else{
+            console.log("Anexo enviado 1!");
+            return res.status(200).json({
+                status: true,
+                sender
+            });
+        }
     }catch  (err){
         console.log(err);
         return res.status(500).json({
