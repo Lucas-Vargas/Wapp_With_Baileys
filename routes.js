@@ -1,11 +1,15 @@
 import { Router } from 'express';
-import { connectToWapp, disconnectFromWapp, sendMessage, sendImageAlone, sendImageMessage, getStatus } from './wappFunctions.ts';
+import { connectToWapp, disconnectFromWapp, sendMessage, sendImageAlone, sendImageMessage, getStatus, reconectSessions } from './wappFunctions.ts';
 import multer from 'multer';
 import QRCode from 'qrcode';
 
 const upload = multer();
 const router = Router();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let sessoes = await reconectSessions();
+await sleep(2000)
+console.log(sessoes);
 
 router.post('/create-session',upload.none(), async (req, res) => {
     const sender = req.body.sender;
@@ -57,7 +61,7 @@ router.post('/qr-code', upload.none(), async (req, res) => {
 router.post('/sessao-ativa',upload.none(), async (req, res) =>{
     const { sender } = req.body;
     const status = await getStatus(sender);
-    console.log(status)
+    console.log('Stauts: ',status, 'Sessão: ',sender)
     if (status == 'connected'){
         return res.status(200).json({
             status: true,
@@ -65,6 +69,15 @@ router.post('/sessao-ativa',upload.none(), async (req, res) =>{
             sender
         });
     }else if (status == undefined){
+        let reconnect = await connectToWapp(sender)
+        console.log('reconect status: ',reconnect.status)
+        if (reconnect.status == 'connected'){
+            return res.status(200).json({
+                status: true,
+                message:"ativado",
+                sender
+            });
+        }
         return res.status(422).json({
             status: false,
             message:"inexistente",
@@ -247,4 +260,5 @@ router.post('/sendImageMessage/:sessionId', async(req,res) =>{
         })
     }
 })
+
 export default router

@@ -3,6 +3,7 @@ import { Boom } from '@hapi/boom'
 import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
 import pino from 'pino'
+import fs from 'fs'
 
 const activeSockets = new Map<string, WASocket>()
 const sessionQrCodes = new Map<string, string>()
@@ -75,6 +76,34 @@ function waitForQrCode(sessionId: string, timeoutMs = 30000) {
         waiters.push(resolveOnce)
         qrWaiters.set(sessionId, waiters)
     })
+}
+
+export async function reconectSessions(){
+    const caminho = './sessions'; 
+    let sessoes: string[] = []
+    const promises: Promise<string | number>[] = []
+    
+    const itens = await fs.readdir(caminho, { withFileTypes: true }, (err, itens) => {
+      if (err) {
+        console.error('Erro ao ler a pasta:', err);
+        return;
+      }
+    let count:int = 0;
+    itens.forEach(item => {
+        if (item.isDirectory()) {
+            count++;
+            console.log(count);
+            
+            promises.push(new Promise((resolve, reject) => {
+                connectToWapp(item.name, { waitForQr: true })
+            }))
+            sessoes.push(item.name)
+        } else {
+            console.log(`[Arquivo] ${item.name}`);
+        }
+      });
+    });
+    return {sessoes}
 }
 
 async function createSocket(sessionId: string) {
@@ -245,7 +274,7 @@ export async function sendMessage(sessionId: string, phone: string, message: str
         return {messageSent: false, error: err.message}
     }
 }
-                                    //sender,           number,         file64,        mimetype          caption
+
 export async function sendImageAlone(sessionId: string, phone: string, file64: string, mimetype: string, caption: string) {
     try {
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
