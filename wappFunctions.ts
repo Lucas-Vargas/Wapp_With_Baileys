@@ -288,15 +288,9 @@ export async function sendImageAlone(sessionId: string, phone: string, file64: s
         const content = { image: {url: media} }
         const njid = phone
         if (mimetype == 'application/pdf'){
-            await sock.sendMessage(njid, {
-                                   document: media,
-                                   caption
-                                   });
+            await sock.sendMessage(njid, {document: media, caption});
         }else{
-            await sock.sendMessage(njid, {
-                                   image: media,
-                                   caption
-                                   });
+            await sock.sendMessage(njid, {image: media, caption});
         }
         console.log('enviado ao cliente')
         return {messageSent: true, error: 0}
