@@ -179,6 +179,7 @@ router.post('/send-message',upload.none(), async (req, res) => {
 router.post('/send-media',upload.none(), async (req, res) => {
     try{
         const {sender, number, mimetype, file64} = req.body;
+        console.log(sender, number, mimetype);
         let {caption} = req.body;
 
         var cpt = caption.toLowerCase();
@@ -212,7 +213,7 @@ router.post('/send-media',upload.none(), async (req, res) => {
             sender
         })
     }catch  (err){
-        console.log(err)
+        console.log(err);
         return res.status(500).json({
             status: false,
             message: 'Erro ao enviar mensagem',

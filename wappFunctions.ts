@@ -204,8 +204,10 @@ export async function connectToWapp(sessionId: string, options: ConnectToWappOpt
                     .catch(console.error)
             }
         }
-        console.log('Status atual:', sessionConnectionStates.get(sessionId))
-    })
+        if(sessionConnectionStates.get(sessionId) != "waiting_qr"){
+            console.log('Status atual:', sessionConnectionStates.get(sessionId))
+        }
+        })
     sock.ev.on('creds.update', saveCreds)
     const qrcode = options.waitForQr
         ? await waitForQrCode(
@@ -285,11 +287,18 @@ export async function sendImageAlone(sessionId: string, phone: string, file64: s
 
         const content = { image: {url: media} }
         const njid = phone
-        await sock.sendMessage(njid, {
-                               mimetype,
-                               image: media,
-                               caption
-                               });
+        if (mimetype == 'application/pdf'){
+            await sock.sendMessage(njid, {
+                                   document: media,
+                                   caption
+                                   });
+        }else{
+            await sock.sendMessage(njid, {
+                                   image: media,
+                                   caption
+                                   });
+        }
+        console.log('enviado ao cliente')
         return {messageSent: true, error: 0}
 
     } catch (err:any) {
