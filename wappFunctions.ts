@@ -91,9 +91,8 @@ export async function reconectSessions(){
     let count:int = 0;
     itens.forEach(item => {
         if (item.isDirectory()) {
-            count++;
-            console.log(count);
-            
+            count++;            
+            sessoes.push(item.name);
             promises.push(new Promise((resolve, reject) => {
                 connectToWapp(item.name, { waitForQr: true })
             }))
@@ -103,6 +102,10 @@ export async function reconectSessions(){
         }
       });
     });
+    if (true){
+        console.log('Tentando Reconectar sessões:')
+        console.log(sessoes)
+    }
     return {sessoes}
 }
 

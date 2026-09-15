@@ -7,9 +7,7 @@ const upload = multer();
 const router = Router();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let sessoes = await reconectSessions();
-await sleep(2000)
-console.log(sessoes);
+reconectSessions();
 
 router.post('/create-session',upload.none(), async (req, res) => {
     const sender = req.body.sender;
