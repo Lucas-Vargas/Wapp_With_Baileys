@@ -1,10 +1,8 @@
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, type WASocket } from '@whiskeysockets/baileys'
 import {verifySessions} from './utils.ts'
 import { Boom } from '@hapi/boom'
-import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
 import pino from 'pino'
-import fs from 'fs/promises'
 const sleep = (ms: number): Promise<void> => {return new Promise((resolve) => setTimeout(resolve, ms));};
 
 const activeSockets = new Map<string, WASocket>()
@@ -95,7 +93,7 @@ export async function removeDisconnectedSessions(){
         console.log('Lista de sessões:\n',sessions)
         for(let count of sessions){
             if (count.status != 'connected'){
-                fs.rm(`./sessions/${count.directory}`, {recursive: true, force: true})
+                rm(`./sessions/${count.directory}`, {recursive: true, force: true})
             }
         }
         return true

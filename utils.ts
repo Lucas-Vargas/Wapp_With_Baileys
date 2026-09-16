@@ -1,11 +1,7 @@
-import makeWASocket, { DisconnectReason, useMultiFileAuthState, type WASocket } from '@whiskeysockets/baileys'
 import {getStatus} from './wappFunctions.ts'
-import { Boom } from '@hapi/boom'
-import terminalQrcode from 'qrcode-terminal'
-import { rm } from 'node:fs/promises'
-import pino from 'pino'
-import fs from 'fs/promises';
+import fs from 'fs/promises'
 const sleep = (ms: number): Promise<void> => {return new Promise((resolve) => setTimeout(resolve, ms));};
+
 
 export async function verifySessions(){
   const caminho = './sessions'; 
