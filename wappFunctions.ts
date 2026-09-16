@@ -102,12 +102,10 @@ export async function removeDisconnectedSessions(){
         return false
     }
 }
-    
 
 export async function reconectSessions(){
     const promises: Promise<string | number>[] = []
     const sessions = await verifySessions()
-    console.log(sessions)
     for (const item of sessions){
         promises.push(new Promise((resolve, reject) => {
             connectToWapp(item.directory, { waitForQr: true })
