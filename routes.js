@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { connectToWapp, disconnectFromWapp, sendMessage, sendImageAlone, sendImageMessage, getStatus, reconectSessions } from './wappFunctions.ts';
+import { connectToWapp, disconnectFromWapp, sendMessage, sendImageAlone, sendImageMessage, getStatus, reconectSessions, removeDisconnectedSessions } from './wappFunctions.ts';
 import multer from 'multer';
 import QRCode from 'qrcode';
 
@@ -8,6 +8,8 @@ const router = Router();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 reconectSessions();
+
+setTimeout(() => {removeDisconnectedSessions();}, 10000);
 
 router.post('/create-session',upload.none(), async (req, res) => {
     const sender = req.body.sender;

@@ -4,7 +4,7 @@ import { Boom } from '@hapi/boom'
 import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
 import pino from 'pino'
-import fs from 'fs'
+import fs from 'fs/promises'
 const sleep = (ms: number): Promise<void> => {return new Promise((resolve) => setTimeout(resolve, ms));};
 
 const activeSockets = new Map<string, WASocket>()
@@ -89,46 +89,32 @@ async function verifyExistingNumber(number:string, sock:WASocket){
     }
 }
 
-async function removeDisconnectedSessions(sessoesParaExcluir: string[]){
-    console.log('Sessões excluidas:')
-    for(let count = 0; count < sessoesParaExcluir.lenght(); count++){
-        console.log('estatus exclusao: ',sessaoVerificada)
-        if (sessaoVerificada != 'conected' && sessaoVerificada != undefined){
-            fs.rm(`./sessions/${sessoesParaExcluir[count]}`)
-            console.log(sessoesParaExcluir[count])
+export async function removeDisconnectedSessions(){
+    try{
+        const sessions = await verifySessions();
+        console.log('Lista de sessões:\n',sessions)
+        for(let count of sessions){
+            if (count.status != 'connected'){
+                fs.rm(`./sessions/${count.directory}`, {recursive: true, force: true})
+            }
         }
+        return true
+    }catch(err){
+        console.log(err)
+        return false
     }
-    
 }
+    
 
 export async function reconectSessions(){
-    const caminho = './sessions'; 
-    let sessoes: string[] = []
-    let sessoes_desconectadas: string[] = []
     const promises: Promise<string | number>[] = []
-    
-    const itens = await fs.readdir(caminho, { withFileTypes: true }, (err, itens) => {
-      if (err) {
-        console.error('Erro ao ler a pasta:', err);
-        return;
-      }
-    let count:int = 0;
-    itens.forEach(item => {
-        if (item.isDirectory()) {
-            count++;            
-            sessoes.push(item.name);
-            promises.push(new Promise((resolve, reject) => {
-                connectToWapp(item.name, { waitForQr: true })
-            }))
-            sessoes.push(item.name)
-        } else {
-            console.log(`[Arquivo] ${item.name}`);
-        }
-      });
-    });
-    let teste = await verifySessions()
-    console.log('a',teste)
-    return {sessoes}
+    const sessions = await verifySessions()
+    console.log(sessions)
+    for (const item of sessions){
+        promises.push(new Promise((resolve, reject) => {
+            connectToWapp(item.directory, { waitForQr: true })
+        }));
+    }
 }
 
 async function createSocket(sessionId: string) {
@@ -184,9 +170,6 @@ export async function connectToWapp(sessionId: string, options: ConnectToWappOpt
         }
         if (qr) {
             sessionConnectionStates.set(sessionId, 'waiting_qr')
-            //terminalQrcode.generate(qr, {
-            //    small: true
-            //})
             publishQrCode(sessionId, qr)
         }
         if (connection === 'open') {
@@ -230,7 +213,7 @@ export async function connectToWapp(sessionId: string, options: ConnectToWappOpt
             }
         }
         if(sessionConnectionStates.get(sessionId) != "waiting_qr"){
-            console.log('Status atual:', sessionConnectionStates.get(sessionId))
+            console.log('Sessão:',sessionId,'Status:', sessionConnectionStates.get(sessionId))
         }
         })
     sock.ev.on('creds.update', saveCreds)
