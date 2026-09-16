@@ -1,0 +1,1 @@
+C:\Wapp\servico\win64\nssm install WhatsAppBoreo

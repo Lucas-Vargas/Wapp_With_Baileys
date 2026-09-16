@@ -1,4 +1,5 @@
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, type WASocket } from '@whiskeysockets/baileys'
+import {verifySessions} from './utils.ts'
 import { Boom } from '@hapi/boom'
 import terminalQrcode from 'qrcode-terminal'
 import { rm } from 'node:fs/promises'
@@ -79,28 +80,27 @@ function waitForQrCode(sessionId: string, timeoutMs = 30000) {
     })
 }
 
-async function verificarNumeroExite(number:string, sock:WASocket){
+async function verifyExistingNumber(number:string, sock:WASocket){
     const numeroExiste = await sock.onWhatsApp(number);
     if (numeroExiste.length > 1){
         return {exists: false}
     }else{
         return numeroExiste[0]    
     }
-    
 }
 
-async function verificarSessoesDesconectadas(sessoes: string[]){
+async function removeDisconnectedSessions(sessoesParaExcluir: string[]){
     console.log('Sessões excluidas:')
-    for(let count = 0; count < sessoes.lenght(); count++){
-        let sessaoVerificada = await getStatus(sessoes[count])
+    for(let count = 0; count < sessoesParaExcluir.lenght(); count++){
         console.log('estatus exclusao: ',sessaoVerificada)
         if (sessaoVerificada != 'conected' && sessaoVerificada != undefined){
-            fs.rm(`./sessions/${sessoes[count]}`)
-            console.log(sessoes[count])
+            fs.rm(`./sessions/${sessoesParaExcluir[count]}`)
+            console.log(sessoesParaExcluir[count])
         }
     }
     
 }
+
 export async function reconectSessions(){
     const caminho = './sessions'; 
     let sessoes: string[] = []
@@ -126,14 +126,8 @@ export async function reconectSessions(){
         }
       });
     });
-    /*if (sessoes.lenght > 0){
-        console.log('Tentando Reconectar sessões:')
-        console.log(sessoes)
-        await sleep(5000)
-        console.log('entrou no verificarSessoesDesconectadas')
-        await verificarSessoesDesconectadas(sessoes)
-    }*/
-    
+    let teste = await verifySessions()
+    console.log('a',teste)
     return {sessoes}
 }
 
@@ -294,7 +288,7 @@ export async function sendMessage(sessionId: string, phone: string, message: str
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
         
-        const numeroExiste = await verificarNumeroExite(phone, sock);
+        const numeroExiste = await verifyExistingNumber(phone, sock);
 
         if (!numeroExiste?.exists){
             console.log('Numero enviado não existe! ',numeroExiste)
@@ -320,7 +314,7 @@ export async function sendImageAlone(sessionId: string, phone: string, file64: s
         const sock = activeSockets.get(sessionId) ?? (await connectToWapp(sessionId)).sock
         await sock.waitForSocketOpen()
 
-        const numeroExiste = await verificarNumeroExite(phone, sock);
+        const numeroExiste = await verifyExistingNumber(phone, sock);
 
         if (!numeroExiste?.exists){
             console.log('Numero enviado não existe! ',numeroExiste)
