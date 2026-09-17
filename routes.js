@@ -9,7 +9,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 reconectSessions();
 
-setTimeout(() => {removeDisconnectedSessions();}, 10000);
+//setTimeout(() => {removeDisconnectedSessions();}, 10000);
 
 router.post('/create-session',upload.none(), async (req, res) => {
     const sender = req.body.sender;
